@@ -9,41 +9,46 @@ from datetime import datetime
 HISTORY_FILE_PATH = "history.json"
 
 # --- Data ---
-# Предварительно заданные задачи с указанием типа (можно расширить)
-# Формат: {"description": "Название задачи", "type": "Тип задачи"}
 DEFAULT_TASKS = [
-    {"description": "Прочитать статью по теме", "type": "Учёба"},
-    {"description": "Сделать зарядку (15 минут)", "type": "Спорт"},
-    {"description": "Проверить почту и ответить на важные письма", "type": "Работа"},
-    {"description": "Написать план на следующий день", "type": "Работа"},
-    {"description": "Изучить новую главу учебника", "type": "Учёба"},
-    {"description": "Пробежка (30 минут)", "type": "Спорт"},
-    {"description": "Позвонить другу/родственнику", "type": "Личное"},
-    {"description": "Послушать образовательный подкаст", "type": "Учёба"},
-    {"description": "Разработать новый компонент", "type": "Работа"},
-    {"description": "Медитация (10 минут)", "type": "Спорт"},
+    {"description": "Прочитать главу учебника по программированию", "type": "Учёба"},
+    {"description": "Сделать 15-минутную зарядку", "type": "Спорт"},
+    {"description": "Проверить рабочую почту и ответить на важные письма", "type": "Работа"},
+    {"description": "Составить список дел на завтра", "type": "Работа"},
+    {"description": "Изучить новую концепцию из курса", "type": "Учёба"},
+    {"description": "Краткая пробежка (30 минут)", "type": "Спорт"},
+    {"description": "Позвонить члену семьи или другу", "type": "Личное"},
+    {"description": "Прослушать образовательный подкаст", "type": "Учёба"},
+    {"description": "Разработать новый UI-компонент", "type": "Работа"},
+    {"description": "Сеанс медитации (10 минут)", "type": "Спорт"},
 ]
 
-tasks = [] # Здесь будут храниться все задачи (начальные + добавленные пользователем)
-history = [] # Список для истории сгенерированных задач
+# Глобальные переменные
+tasks = []
+history = []
 
 # --- File Operations ---
 def load_tasks():
-    """Загружает задачи из файла, если он существует. Иначе использует предопределенные."""
-    global tasks
+    """Загружает задачи и историю из файла. Инициализирует переменные."""
+    global tasks, history # !!! ИСПРАВЛЕНО: Явное объявление глобальных переменных
     if os.path.exists(HISTORY_FILE_PATH):
         try:
             with open(HISTORY_FILE_PATH, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+                # Если в файле нет ключей, используем значения по умолчанию
                 tasks = data.get("tasks", DEFAULT_TASKS)
                 history = data.get("history", [])
         except (IOError, json.JSONDecodeError) as e:
-            messagebox.showerror("Ошибка загрузки", f"Не удалось загрузить данные из {HISTORY_FILE_PATH}: {e}\nИспользуются задачи по умолчанию.")
-            tasks = DEFAULT_TASKS
+            messagebox.showerror("Ошибка загрузки", f"Не удалось загрузить данные из {HISTORY_FILE_PATH}: {e}\nИспользуются задачи по умолчанию, история будет пустой.")
+            tasks = DEFAULT_TASKS # Сбрасываем на дефолтные в случае ошибки
             history = []
     else:
+        # Если файл не существует, инициализируем значениями по умолчанию
         tasks = DEFAULT_TASKS
         history = []
+    # Убедимся, что history - это список, если вдруг в файле было что-то некорректное
+    if not isinstance(history, list):
+        history = []
+
 
 def save_data():
     """Сохраняет текущий список задач и историю в JSON-файл."""
@@ -55,49 +60,54 @@ def save_data():
 
 # --- Core Logic ---
 def add_task(description, task_type):
-    """Добавляет новую задачу. Проверяет корректность ввода."""
-    if not description.strip(): # Проверка на пустую строку
+    """Добавляет новую задачу с валидацией описания и типа."""
+    # !!! ИСПРАВЛЕНО: Добавлена валидация типа задачи
+    if not description.strip():
         messagebox.showwarning("Ошибка ввода", "Описание задачи не может быть пустым.")
         return False
-    new_task = {"description": description.strip(), "type": task_type.strip() if task_type.strip() else "Без категории"}
+    if not task_type.strip():
+        messagebox.showwarning("Ошибка ввода", "Тип задачи не может быть пустым.")
+        return False
+
+    new_task = {"description": description.strip(), "type": task_type.strip()}
     tasks.append(new_task)
     save_data()
-    update_task_types_filter() # Обновить фильтры после добавления новой задачи
     return True
 
 def generate_random_task(selected_type=None):
     """
     Выбирает случайную задачу.
     Если указан selected_type, фильтрует задачи по этому типу.
+    Записывает выбранную задачу в историю.
     """
     filtered_tasks = tasks
+    # !!! ИСПРАВЛЕНО: Фильтрация по типу задачи
     if selected_type and selected_type != "Все типы":
         filtered_tasks = [task for task in tasks if task.get("type") == selected_type]
 
     if not filtered_tasks:
-        return {"description": "Нет задач для данного фильтра", "type": "Информация"}
+        return {"description": "Нет задач для выбранного фильтра.", "type": "Информация"}
 
     chosen_task = random.choice(filtered_tasks)
 
-    # Формируем запись в историю
+    # Запись в историю
     history_entry = {
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "task": chosen_task.get("description"),
         "type": chosen_task.get("type")
     }
     history.append(history_entry)
-    save_data()
-    update_history_display()
+    save_data() # !!! ИСПРАВЛЕНО: сохраняем данные после добавления в историю
     return chosen_task
 
 # --- GUI ---
 class TaskGeneratorApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Random Task Generator")
-        self.root.geometry("700x600")
+        self.root.title("Генератор Случайных Задач")
+        self.root.geometry("750x600")
 
-        load_tasks() # Загружаем задачи и историю при запуске
+        load_tasks() # Загружаем задачи и историю при старте
 
         self.create_widgets()
         self.update_history_display()
@@ -105,138 +115,154 @@ class TaskGeneratorApp:
 
     def create_widgets(self):
         # --- Frames ---
-        control_frame = ttk.LabelFrame(self.root, text="Управление", padding=(10, 5))
+        control_frame = ttk.LabelFrame(self.root, text="Панель управления", padding=(10, 5))
         control_frame.pack(pady=10, padx=10, fill="x")
 
         task_frame = ttk.LabelFrame(self.root, text="Сгенерированная задача", padding=(10, 5))
         task_frame.pack(pady=5, padx=10, fill="x")
 
-        history_frame = ttk.LabelFrame(self.root, text="История задач", padding=(10, 5))
+        history_frame = ttk.LabelFrame(self.root, text="История выполненных задач", padding=(10, 5))
         history_frame.pack(pady=10, padx=10, fill="both", expand=True)
 
         # --- Control Frame Widgets ---
-        # Filter
         ttk.Label(control_frame, text="Фильтр по типу:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
         self.filter_type_var = tk.StringVar()
-        self.filter_type_combo = ttk.Combobox(control_frame, textvariable=self.filter_type_var, state="readonly", width=20)
+        self.filter_type_combo = ttk.Combobox(control_frame, textvariable=self.filter_type_var, state="readonly", width=25)
         self.filter_type_combo.grid(row=0, column=1, padx=5, pady=5)
+
+        # Привязываем событие изменения фильтра к обновлению отображения задачи
         self.filter_type_combo.bind("<<ComboboxSelected>>", self.on_filter_change)
 
-        # Add Task Button
         add_task_btn = ttk.Button(control_frame, text="Добавить задачу", command=self.open_add_task_dialog)
         add_task_btn.grid(row=0, column=2, padx=10, pady=5)
 
-        # Generate Button
+        # !!! ИСПРАВЛЕНО: Кнопка генерации теперь является отдельным элементом
         self.generate_btn = ttk.Button(control_frame, text="Сгенерировать задачу", command=self.generate_and_display_task)
-        self.generate_btn.grid(row=1, column=0, columnspan=3, pady=10)
+        self.generate_btn.grid(row=0, column=3, padx=5, pady=5)
 
         # --- Task Frame Widgets ---
-        self.task_label = ttk.Label(task_frame, text="Нажмите кнопку для генерации задачи", wraplength=600, font=("Arial", 12))
-        self.task_label.pack(pady=10)
+        self.task_description_label = ttk.Label(task_frame, text="Задача: ", font=("TkDefaultFont", 12, "bold"), wraplength=600)
+        self.task_description_label.pack(pady=10)
+        self.task_type_label = ttk.Label(task_frame, text="Тип: ", font=("TkDefaultFont", 10, "italic"))
+        self.task_type_label.pack(pady=5)
 
         # --- History Frame Widgets ---
-        self.history_tree_scroll = ttk.Scrollbar(history_frame)
-        self.history_tree_scroll.pack(side="right", fill="y")
-        self.history_tree_scroll_x = ttk.Scrollbar(history_frame, orient="horizontal")
-        self.history_tree_scroll_x.pack(side="bottom", fill="x")
+        self.history_tree = ttk.Treeview(history_frame, columns=("Timestamp", "Type", "Description"), show="headings")
+        self.history_tree.heading("Timestamp", text="Дата и время")
+        self.history_tree.heading("Type", text="Тип")
+        self.history_tree.heading("Description", text="Описание")
 
-        columns = ("timestamp", "type", "task")
-        self.history_table = ttk.Treeview(
-            history_frame,
-            columns=columns,
-            show="headings",
-            yscrollcommand=self.history_tree_scroll.set,
-            xscrollcommand=self.history_tree_scroll_x.set
-        )
+        # Настройка ширины колонок
+        self.history_tree.column("Timestamp", width=180, anchor=tk.W)
+        self.history_tree.column("Type", width=100, anchor=tk.W)
+        self.history_tree.column("Description", width=400, anchor=tk.W)
 
-        self.history_table.heading("timestamp", text="Время")
-        self.history_table.heading("type", text="Тип")
-        self.history_table.heading("task", text="Задача")
+        # Скруллбары для Treeview
+        vsb = ttk.Scrollbar(history_frame, orient="vertical", command=self.history_tree.yview)
+        vsb.pack(side=tk.RIGHT, fill="y")
+        hsb = ttk.Scrollbar(history_frame, orient="horizontal", command=self.history_tree.xview)
+        hsb.pack(side=tk.BOTTOM, fill="x")
+        self.history_tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
 
-        self.history_table.column("timestamp", width=150, anchor="w")
-        self.history_table.column("type", width=100, anchor="center")
-        self.history_table.column("task", width=350, anchor="w")
+        self.history_tree.pack(fill="both", expand=True)
 
-        self.history_table.pack(fill="both", expand=True)
-        self.history_tree_scroll.config(command=self.history_table.yview)
-        self.history_tree_scroll_x.config(command=self.history_table.xview)
+        # Изначальное отображение задачи (если есть)
+        self.display_initial_task()
 
-    def update_task_types_filter(self):
-        """Обновляет список доступных типов задач для фильтрации."""
-        unique_types = sorted(list(set(task.get("type", "Без категории") for task in tasks)))
-        filter_options = ["Все типы"] + unique_types
-        self.filter_type_combo['values'] = filter_options
-        # Если текущий выбранный тип больше не существует, сбросить фильтр
-        current_filter = self.filter_type_var.get()
-        if current_filter not in filter_options:
-            self.filter_type_var.set("Все типы")
-
-    def on_filter_change(self, event=None):
-        """Вызывается при изменении фильтра. Перегенерирует задачу, чтобы учесть фильтр."""
-        self.generate_and_display_task()
+    def display_initial_task(self):
+        """Отображает первую задачу при запуске, если она есть."""
+        if tasks:
+            # Показываем любую задачу, для демонстрации
+            initial_task = tasks[0]
+            self.task_description_label.config(text=f"Задача: {initial_task.get('description', 'N/A')}")
+            self.task_type_label.config(text=f"Тип: {initial_task.get('type', 'N/A')}")
+            self.filter_type_var.set("Все типы") # Сбрасываем фильтр
+        else:
+            self.task_description_label.config(text="Задача: Нет доступных задач!")
+            self.task_type_label.config(text="")
 
     def generate_and_display_task(self):
-        """Генерирует задачу и отображает ее в GUI."""
-        selected_type = self.filter_type_var.get()
-        task_task_data.get('type', 'Без типа')})")
-        else:
-            self.task_label.config(text="Ошибка генерации задачи.")
+        """
+        !!! ИСПРАВЛЕНО: Корректно генерирует и отображает задачу.
+        Вызывает generate_random_task с учетом выбранного фильтра.
+        Обновляет метки с описанием и типом задачи.
+        """
+        selected_filter = self.filter_type_var.get()
+        generated_task = generate_random_task(selected_filter if selected_filter else None)
+
+        self.task_description_label.config(text=f"Задача: {generated_task.get('description', 'N/A')}")
+        self.task_type_label.config(text=f"Тип: {generated_task.get('type', 'N/A')}")
+
+        self.update_history_display() # Обновляем историю после генерации
+
+    def on_filter_change(self, event=None):
+        """Обработчик изменения фильтра, который запускает генерацию задачи."""
+        # При изменении фильтра, сразу генерируем новую задачу, чтобы она соответствовала фильтру
+        self.generate_and_display_task()
+
+    def update_task_types_filter(self):
+        """Обновляет список типов задач в выпадающем меню фильтра."""
+        # Собираем уникальные типы из существующих задач
+        # Добавляем "Все типы" как первый вариант
+        unique_types = sorted(list(set(task.get("type") for task in tasks)))
+        filter_options = ["Все типы"] + unique_types
+        self.filter_type_combo['values'] = filter_options
+        # Устанавливаем "Все типы" по умолчанию, если комбобокс еще не заполнен
+        if not self.filter_type_var.get() or self.filter_type_var.get() not in filter_options:
+            self.filter_type_var.set("Все типы")
 
     def update_history_display(self):
-        """Очищает и обновляет таблицу истории."""
-        for item in self.history_table.get_children():
-            self.history_table.delete(item)
+        """Очищает и заполняет Treeview данными из глобальной истории."""
+        # Очищаем старые данные
+        for item in self.history_tree.get_children():
+            self.history_tree.delete(item)
 
-        # Отображаем историю в обратном порядке (последние сверху)
+        # Заполняем новыми данными (от новых к старым)
         for entry in reversed(history):
-            try:
-                self.history_table.insert("", "end", values=(
-                    entry.get("timestamp", "N/A"),
-                    entry.get("type", "N/A"),
-                    entry.get("task", "N/A")
-                ))
-            except Exception as e:
-                print(f"Ошибка при добавлении в таблицу истории: {e}. Запись: {entry}") # Логирование для отладки
+            self.history_tree.insert("", tk.END, values=(
+                entry.get("timestamp", "N/A"),
+                entry.get("type", "N/A"),
+                entry.get("task", "N/A")
+            ))
 
     def open_add_task_dialog(self):
         """Открывает диалоговое окно для добавления новой задачи."""
-        # Можно использовать simpledialog, но для двух полей (описание и тип) лучше сделать свой Toplevel окно.
-
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Добавить новую задачу")
-        dialog.geometry("350x200")
-        dialog.transient(self.root) # Делает окно модальным относительно главного
-        dialog.grab_set() # Блокируем взаимодействие с главным окном
-
-        dialog_frame = ttk.Frame(dialog, padding=(10, 10))
-        dialog_frame.pack(fill="both", expand=True)
-
-        ttk.Label(dialog_frame, text="Описание задачи:").grid(row=0, column=0, sticky="w", pady=5)
-        desc_entry = ttk.Entry(dialog_frame, width=30)
-        desc_entry.grid(row=0, column=1, pady=5)
-        desc_entry.focus_set() # Устанавливаем фокус на поле ввода
-
-        ttk.Label(dialog_frame, text="Тип задачи (учёба, спорт, работа, личное):").grid(row=1, column=0, sticky="w", pady=5)
-        type_entry = ttk.Entry(dialog_frame, width=30)
-        type_entry.grid(row=1, column=1, pady=5)
-
-        def save_and_close():
-            description = desc_entry.get()
-            task_type = type_entry.get()
+        dialog = AddTaskDialog(self.root)
+        if dialog.result:
+            description, task_type = dialog.result
             if add_task(description, task_type):
-                dialog.destroy() # Закрываем диалог только если задача успешно добавлена
+                # Если задача успешно добавлена, обновляем фильтр типов
+                self.update_task_types_filter()
+                # Перевыбираем "Все типы" в фильтре
+                self.filter_type_var.set("Все типы")
+                messagebox.showinfo("Успех", "Задача успешно добавлена!")
+            else:
+                # Ошибка валидации уже показана в add_task
+                pass
 
-        add_button = ttk.Button(dialog_frame, text="Добавить", command=save_and_close)
-        add_button.grid(row=2, column=0, columnspan=2, pady=15)
+class AddTaskDialog(simpledialog.Dialog):
+    """Пользовательское диалоговое окно для добавления задачи."""
+    def body(self, master):
+        ttk.Label(master, text="Описание задачи:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        self.description_entry = ttk.Entry(master, width=40)
+        self.description_entry.grid(row=0, column=1, padx=5, pady=2)
 
-        # Обработка нажатия Enter в полях ввода
-        desc_entry.bind("<Return>", lambda event: save_and_close())
-        type_entry.bind("<Return>", lambda event: save_and_close())
+        ttk.Label(master, text="Тип задачи (например, Работа, Учёба, Спорт):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        self.type_entry = ttk.Entry(master, width=40)
+        self.type_entry.grid(row=1, column=1, padx=5, pady=2)
+
+        return self.description_entry # Устанавливаем фокус на первое поле
+
+    def apply(self):
+        description = self.description_entry.get()
+        task_type = self.type_entry.get()
+        # !!! ИСПРАВЛЕНО: В `add_task` уже есть валидация. Здесь просто передаем данные.
+        self.result = (description, task_type)
 
 
 # --- Main Execution ---
 if __name__ == "__main__":
     root = tk.Tk()
     app = TaskGeneratorApp(root)
-    root.protocol("WM_DELETE_WINDOW", lambda: (save_data(), root.destroy())) # Безопасное закрытие
     root.mainloop()
+
